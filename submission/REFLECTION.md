@@ -12,7 +12,7 @@
 
 ## 1. Hardware spec (từ `00-setup/detect-hardware.py`)
 
-- **OS:** Linux 5.15.0-163-generic (x86_64)
+- **OS:** Ubuntu 22.04.5 LTS
 - **CPU:** Intel(R) Xeon(R) Platinum 8269CY CPU @ 2.50GHz
 - **Cores:** 4 physical / 4 logical
 - **CPU extensions:** AVX-512 available
