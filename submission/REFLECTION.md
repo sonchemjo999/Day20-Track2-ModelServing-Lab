@@ -1,123 +1,112 @@
-# Reflection — Lab 20 (Personal Report)
+# Reflection - Lab 20 (Personal Report)
 
-> **Đây là báo cáo cá nhân.** Mỗi học viên chạy lab trên laptop của mình, với spec của mình. Số liệu của bạn không so sánh được với bạn cùng lớp — chỉ so sánh **before vs after trên chính máy bạn**. Grade rubric tính theo độ rõ ràng của setup + tuning của bạn, không phải tốc độ tuyệt đối.
+> Day 20 - Model Serving & Inference Optimization. Báo cáo cá nhân dựa trên artifact đã có trong repo và screenshot.
 
 ---
 
-**Họ Tên:** _<Họ Tên>_
-**Cohort:** _<A20-K1 / A20-K2 / ...>_
-**Ngày submit:** _<YYYY-MM-DD>_
+**Họ Tên:** Đào Hồng Sơn  
+**MSSV:** 2A202600462  
+**Ngày submit:** 06/05/2026
 
 ---
 
 ## 1. Hardware spec (từ `00-setup/detect-hardware.py`)
 
-> Paste output của `python 00-setup/detect-hardware.py` vào đây, hoặc điền thủ công:
+- **OS:** Linux 5.15.0-163-generic (x86_64)
+- **CPU:** Intel(R) Xeon(R) Platinum 8269CY CPU @ 2.50GHz
+- **Cores:** 4 physical / 4 logical
+- **CPU extensions:** AVX-512 available
+- **RAM:** 7.8 GB
+- **Accelerator:** CPU only, không có discrete accelerator
+- **llama.cpp backend đã chọn:** CPU (AVX/NEON tuning), `n_gpu_layers=0`
+- **Recommended model tier:** TinyLlama-1.1B (Q4_K_M)
 
-- **OS:** _<macOS 14 / Windows 11 / Ubuntu 24.04 / ...>_
-- **CPU:** _<Apple M2 / Intel i7-12700H / AMD Ryzen 7 5800H / ...>_
-- **Cores:** _<physical / logical>_
-- **CPU extensions:** _<AVX2 / AVX-512 / NEON / —>_
-- **RAM:** _<GB>_
-- **Accelerator:** _<NVIDIA RTX 4060 8GB / Apple Metal / AMD ROCm / Vulkan / CPU only>_
-- **llama.cpp backend đã chọn:** _<CUDA / Metal / Vulkan / CPU>_
-- **Recommended model tier:** _<TinyLlama-1.1B / Qwen2.5-1.5B / Llama-3.2-3B / Qwen2.5-7B>_
-
-**Setup story** (≤ 80 chữ): những gì cần thay đổi để lab chạy được trên máy bạn (vd: dùng WSL2, install CUDA Toolkit, fall back sang Vulkan vì ROCm phiên bản kén, tắt antivirus để pip install nhanh hơn, v.v.):
-
-_Answer here._
+**Setup story** (<= 80 chữ):  
+Máy chạy trong môi trường Linux CPU-only nên mình chọn TinyLlama-1.1B để vừa RAM 7.8 GB. Không có CUDA/Metal/Vulkan, vì vậy benchmark dùng `n_threads=4`, `n_ctx=2048`, `n_batch=512`, `n_gpu_layers=0`. Model chính là Q4_K_M, model so sánh là Q2_K.
 
 ---
 
-## 2. Track 01 — Quickstart numbers (từ `benchmarks/01-quickstart-results.md`)
-
-> Paste bảng từ `benchmarks/01-quickstart-results.md` xuống đây (auto-generated bởi `python 01-llama-cpp-quickstart/benchmark.py`).
+## 2. Track 01 - Quickstart numbers (từ `benchmarks/01-quickstart-results.md`)
 
 | Model | Load (ms) | TTFT P50/P95 (ms) | TPOT P50/P95 (ms) | E2E P50/P95/P99 (ms) | Decode rate (tok/s) |
 |---|--:|--:|--:|--:|--:|
-| (Q4_K_M) | | | | | |
-| (Q2_K)   | | | | | |
+| tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf | 1281 | 221 / 266 | 50.6 / 51.6 | 3384 / 3449 / 3468 | 19.8 |
+| tinyllama-1.1b-chat-v1.0.Q2_K.gguf | 236 | 378 / 497 | 48.0 / 49.3 | 3377 / 3523 / 3545 | 20.8 |
 
-**Một quan sát** (≤ 50 chữ): Q4_K_M vs Q2_K trên máy bạn — số liệu nói gì? Quality đáng đánh đổi không?
-
-_Answer here._
+**Một quan sát** (<= 50 chữ):  
+Q2_K load nhanh hơn và decode nhanh hơn nhẹ, nhưng E2E gần như ngang Q4_K_M. Trên máy này Q4_K_M đáng chọn hơn vì mất rất ít latency nhưng chất lượng text thường ổn định hơn.
 
 ---
 
-## 3. Track 02 — llama-server load test
+## 3. Track 02 - llama-server load test
 
-> Chạy 2 lần locust ở concurrency 10 và 50, paste tóm tắt bên dưới.
+Locust screenshot hiển thị response-time percentile, không tách riêng TTFB. Cột TTFB bên dưới vì vậy ghi `N/A`; P95/P99 lấy từ dòng Aggregated trong screenshot.
 
 | Concurrency | Total RPS | TTFB P50 (ms) | E2E P95 (ms) | E2E P99 (ms) | Failures |
 |--:|--:|--:|--:|--:|--:|
-| 10 | | | | | |
-| 50 | | | | | |
+| 10 | ~0.10 | N/A (E2E P50 28000) | 50000 | 50000 | 0 observed |
+| 50 | ~0.13 | N/A (E2E P50 37000) | 52000 | 52000 | 0 observed |
 
-**KV-cache observation** (từ `record-metrics.py`): peak `llamacpp:kv_cache_usage_ratio` ở concurrency 50 = _<0.XX>_, nghĩa là …
-
-_Answer here._
+**KV-cache observation** (từ `record-metrics.py`):  
+Peak `llamacpp:kv_cache_usage_ratio` trong CSV hiện có = `0.00`. Dòng CSV được ghi lúc server idle (`requests_processing=0`, `requests_deferred=0`), nên nó chỉ xác nhận metrics endpoint scrape được, chưa phản ánh peak KV-cache khi concurrency 50 đang chạy. Khi tải thật, cần chạy `record-metrics.py` song song với Locust để lấy peak đúng.
 
 ---
 
-## 4. Track 03 — Milestone integration
+## 4. Track 03 - Milestone integration
 
-- **N16 (Cloud/IaC):** _<piece you connected — k3d cluster / GCP project / docker-compose / "stub: localhost only">_
-- **N17 (Data pipeline):** _<piece — Airflow DAG / batch job / "stub: in-memory dict">_
-- **N18 (Lakehouse):** _<piece — Delta Lake table / Iceberg / "stub: SQLite">_
-- **N19 (Vector + Feature Store):** _<piece — Qdrant index / Feast / "stub: TOY_DOCS">_
+- **N16 (Cloud/IaC):** stub: localhost only, llama-server chạy tại `http://localhost:8080/v1`
+- **N17 (Data pipeline):** stub: batch/in-process Python flow trong `pipeline.py`
+- **N18 (Lakehouse):** stub: không dùng lakehouse thật, context nằm trong Python list
+- **N19 (Vector + Feature Store):** stub: `TOY_DOCS` + keyword-overlap retrieval, chưa dùng vector DB/feature store
 
 **Nơi tốn nhiều ms nhất** trong pipeline (đo bằng `time.perf_counter` trong `pipeline.py`):
 
-- embed: _<ms>_
-- retrieve: _<ms>_
-- llama-server: _<ms>_
+- embed: 0.0 ms (chưa có embedder, retrieval đang keyword-based)
+- retrieve: ~0.1 ms expected trên `TOY_DOCS`
+- llama-server: chưa có log timing pipeline committed; đây sẽ là phần lớn nhất vì mỗi request phải sinh token trên CPU
 
-**Reflection** (≤ 60 chữ): bottleneck nằm ở đâu? Có khớp với kỳ vọng không?
-
-_Answer here._
+**Reflection** (<= 60 chữ):  
+Bottleneck nằm ở llama-server, khớp với kỳ vọng vì embed/retrieve đang stub rất nhỏ còn decode trên CPU tốn hàng chục giây dưới Locust. Nếu thay bằng vector DB thật, retrieval sẽ tăng nhưng vẫn khó vượt chi phí sinh token của TinyLlama CPU-only.
 
 ---
 
-## 5. Bonus — The single change that mattered most
+## 5. Bonus - The single change that mattered most
 
-> **Most important section.** Pick **một** thay đổi từ bonus track (build flag, thread sweep, quant pick, GPU offload, KV-cache quantization, speculative decoding, bất cứ challenge nào trong `BONUS-llama-cpp-optimization/CHALLENGES.md`) đã tạo ra speedup lớn nhất trên máy bạn.
+**Change:** Chọn Q2_K thay cho Q4_K_M khi ưu tiên latency/load-time trên CPU-only RAM 7.8 GB.
 
-**Change:** _<vd: rebuild llama.cpp với `-DGGML_NATIVE=ON -DGGML_BLAS=ON`; vd: hạ `-t` từ 12 xuống 6; vd: bật Metal trên M2>_
+**Before vs after** (từ quickstart quant comparison):
 
-**Before vs after** (paste 2-3 dòng từ sweep output):
-
-```
-before: <số liệu>
-after:  <số liệu>
-speedup: ~<X.Y>×
+```text
+before: Q4_K_M load=1281 ms, TPOT P50=50.6 ms, decode=19.8 tok/s, E2E P50=3384 ms
+after:  Q2_K   load=236 ms,  TPOT P50=48.0 ms, decode=20.8 tok/s, E2E P50=3377 ms
+speedup: ~1.05x decode, ~5.4x model-load speedup
 ```
 
-**Tại sao nó work** (1–2 đoạn ngắn — đây là phần grader đọc kỹ nhất):
+**Tại sao nó work:**  
+Trên CPU-only, model nhỏ hơn giúp giảm lượng weight phải đọc từ RAM và cache mỗi lần load/prefill. Q2_K nên load nhanh hơn rất rõ, vì file quant nhẹ hơn và ít dữ liệu phải map/đọc vào memory. Decode cũng nhanh hơn một chút vì mỗi token cần ít memory bandwidth hơn.
 
-_Giải thích như đang nói với một bạn cùng lớp đang ngồi cạnh. Tránh "vibes-based" reasoning — bám vào mô hình mental của hardware (memory bandwidth? compute? cache?). Nếu kết quả khác kỳ vọng từ deck, nói rõ — đó là phần grader thưởng điểm._
+Tuy nhiên speedup decode chỉ khoảng 5%, không phải 2-4x. Điều này cho thấy workload sau khi model đã load không chỉ bị giới hạn bởi kích thước weight; overhead Python/llama.cpp, prompt length, cache, và CPU scheduling cũng đóng vai trò lớn. Vì E2E gần như ngang nhau, mình sẽ vẫn chọn Q4_K_M nếu cần chất lượng trả lời, chỉ dùng Q2_K khi máy rất thiếu RAM hoặc cần khởi động model nhanh.
 
 ---
 
 ## 6. (Optional) Điều ngạc nhiên nhất
 
-_(1–2 câu — không bắt buộc, nhưng người grader đọc tất cả)_
-
-_Answer here._
+Điều bất ngờ là Q2_K load nhanh hơn rất nhiều nhưng E2E P50 gần như không đổi. Nếu chỉ nhìn file size thì dễ kỳ vọng Q2_K nhanh hơn nhiều, nhưng số liệu cho thấy decode trên CPU có nhiều giới hạn khác ngoài quantization.
 
 ---
 
 ## 7. Self-graded checklist
 
-- [ ] `hardware.json` đã commit
-- [ ] `models/active.json` đã commit (hoặc paste path snapshot vào section 1)
-- [ ] `benchmarks/01-quickstart-results.md` đã commit
-- [ ] `benchmarks/02-server-results.md` (hoặc CSV từ `record-metrics.py`) đã commit
-- [ ] `benchmarks/bonus-*.md` đã commit (ít nhất 1 sweep)
-- [ ] Ít nhất 6 screenshots trong `submission/screenshots/` (xem `submission/screenshots/README.md`)
-- [ ] `make verify` exit 0 (chạy ngay trước khi push)
-- [ ] Repo trên GitHub ở chế độ **public**
+- [x] `hardware.json` đã commit
+- [x] `models/active.json` đã commit
+- [x] `benchmarks/01-quickstart-results.md` đã commit
+- [x] `benchmarks/02-server-metrics.csv` đã commit
+- [ ] `benchmarks/bonus-*.md` đã commit (chưa có bonus sweep file)
+- [ ] Ít nhất 6 screenshots trong `submission/screenshots/` (hiện có 5 screenshots)
+- [ ] `make verify` exit 0 (chưa pass vì thiếu GGUF file referenced trong `models/active.json` và thiếu screenshot thứ 6)
+- [ ] Repo trên GitHub ở chế độ public
 - [ ] Đã paste public repo URL vào VinUni LMS
 
 ---
 
-**Quan trọng:** repo phải **public** đến khi điểm được công bố. Nếu private, grader không xem được → 0 điểm.
+**Quan trọng:** repo phải public đến khi điểm được công bố. Nếu private, grader không xem được -> 0 điểm.
