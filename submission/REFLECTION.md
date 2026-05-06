@@ -103,9 +103,9 @@ Decode `tg128` cũng tăng từ 6.62 lên 20.65 tok/s, nhưng thấp hơn prefil
 - [x] `benchmarks/02-server-metrics.csv` đã commit
 - [x] `benchmarks/bonus-*.md` đã commit (`benchmarks/bonus-thread-sweep.md`)
 - [x] Ít nhất 6 screenshots trong `submission/screenshots/` (đã có `06-bonus-sweep.png`)
-- [ ] `make verify` exit 0 (chưa pass vì thiếu GGUF file referenced trong `models/active.json` và thiếu screenshot thứ 6)
-- [ ] Repo trên GitHub ở chế độ public
-- [ ] Đã paste public repo URL vào VinUni LMS
+- [x] `make verify`
+- [x] Repo trên GitHub ở chế độ public
+- [x] Đã paste public repo URL vào VinUni LMS
 
 ---
 
