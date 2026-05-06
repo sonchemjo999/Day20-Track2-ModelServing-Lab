@@ -1,0 +1,2 @@
+timestamp,n_decode_total,tokens_predicted_total,prompt_tokens_total,kv_cache_usage_ratio,requests_processing,requests_deferred
+1778042646,0,0,0,0.0,0,0
